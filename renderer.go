@@ -339,12 +339,12 @@ func (r *Renderer) renderText(node ast.Node, entering bool) ast.WalkStatus {
 		text := n.Value(r.rc.source)
 
 		// Check if we have a translation for this text
-		if r.config.Translations != nil && !r.rc.skipTranslation {
+		if r.config.TextTransformer != nil && !r.rc.skipTranslation {
 			// Get a string representation of the text
 			textStr := string(text)
 			trimmedText := strings.TrimSpace(textStr)
 
-			if translation, ok := r.config.Translations[trimmedText]; ok {
+			if translation, ok := r.config.TextTransformer.Transform(trimmedText); ok {
 				// Preserve the original leading and trailing spaces
 				leadingSpaces := textStr[:len(textStr)-len(strings.TrimLeftFunc(textStr, unicode.IsSpace))]
 				trailingSpaces := textStr[len(strings.TrimRightFunc(textStr, unicode.IsSpace)):]

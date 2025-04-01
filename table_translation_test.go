@@ -101,7 +101,7 @@ func TestTableTranslation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a new markdown renderer with translations
-			rd := NewRenderer(WithTranslations(tt.translations))
+			rd := NewRenderer(WithTextTransformer(MapTransformer(tt.translations)))
 
 			// Create Goldmark with our renderer and table extension
 			md := goldmark.New(

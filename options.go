@@ -4,6 +4,10 @@ import (
 	"github.com/yuin/goldmark/renderer"
 )
 
+type TextTransformer interface {
+	Transform(text string) (string, bool)
+}
+
 // Config struct holds configurations for the markdown based renderer.
 type Config struct {
 	IndentStyle
@@ -11,7 +15,7 @@ type Config struct {
 	ThematicBreakStyle
 	ThematicBreakLength
 	NestedListLength
-	Translations map[string]string
+	TextTransformer TextTransformer
 }
 
 // NewConfig returns a new Config with defaults and the given options.
@@ -22,7 +26,7 @@ func NewConfig(options ...Option) *Config {
 		ThematicBreakStyle:  ThematicBreakStyle(ThematicBreakStyleDashed),
 		ThematicBreakLength: ThematicBreakLength(ThematicBreakLengthMinimum),
 		NestedListLength:    NestedListLength(NestedListLengthMinimum),
-		Translations:        map[string]string{},
+		TextTransformer:     nil,
 	}
 	for _, opt := range options {
 		opt.SetMarkdownOption(c)
@@ -43,8 +47,8 @@ func (c *Config) SetOption(name renderer.OptionName, value interface{}) {
 		c.ThematicBreakLength = value.(ThematicBreakLength)
 	case optNestedListLength:
 		c.NestedListLength = value.(NestedListLength)
-	case optTranslations:
-		c.Translations = value.(map[string]string)
+	case optTextTransformer:
+		c.TextTransformer = value.(TextTransformer)
 	}
 }
 
@@ -275,29 +279,36 @@ func WithNestedListLength(style NestedListLength) interface {
 }
 
 // ============================================================================
-// Translations Option
+// TextTransformer Option
 // ============================================================================
 
-// optTranslations is an option name used in WithTranslations
-const optTranslations renderer.OptionName = "Translations"
+// optTextTransformer is an option name used in WithTextTransformer
+const optTextTransformer renderer.OptionName = "TextTransformer"
 
-type withTranslations struct {
-	value map[string]string
+type withTextTransformer struct {
+	value TextTransformer
 }
 
-func (o *withTranslations) SetConfig(c *renderer.Config) {
-	c.Options[optTranslations] = o.value
+func (o *withTextTransformer) SetConfig(c *renderer.Config) {
+	c.Options[optTextTransformer] = o.value
 }
 
 // SetMarkdownOption implements renderer.Option
-func (o *withTranslations) SetMarkdownOption(c *Config) {
-	c.Translations = o.value
+func (o *withTextTransformer) SetMarkdownOption(c *Config) {
+	c.TextTransformer = o.value
 }
 
-// WithTranslations is a functional option that sets the translations map for text replacement.
-func WithTranslations(translations map[string]string) interface {
+// WithTextTransformer is a functional option that sets the text transformer for text replacement.
+func WithTextTransformer(transformer TextTransformer) interface {
 	renderer.Option
 	Option
 } {
-	return &withTranslations{translations}
+	return &withTextTransformer{transformer}
+}
+
+type MapTransformer map[string]string
+
+func (t MapTransformer) Transform(text string) (string, bool) {
+	v, ok := t[text]
+	return v, ok
 }

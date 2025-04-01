@@ -118,7 +118,7 @@ func TestTranslations(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			PrintASTFromMarkdown(os.Stdout, []byte(tt.source))
 			// Create a new markdown renderer with translations
-			renderer := NewRenderer(WithTranslations(tt.translations))
+			renderer := NewRenderer(WithTextTransformer(MapTransformer(tt.translations)))
 
 			// Parse the markdown source
 			doc := goldmark.New(
@@ -182,8 +182,8 @@ func TestRenderText(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			config := NewConfig(WithTranslations(tt.translations))
-			renderer := NewRenderer(WithTranslations(tt.translations))
+			config := NewConfig(WithTextTransformer(MapTransformer(tt.translations)))
+			renderer := NewRenderer(WithTextTransformer(MapTransformer(tt.translations)))
 			source := []byte(tt.text)
 
 			// Create a text node
