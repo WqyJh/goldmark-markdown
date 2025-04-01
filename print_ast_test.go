@@ -31,6 +31,17 @@ This is a ` + "`" + "inline code" + "`" + `.
 
 > This is a blockquote.
 
+<div>
+This is a div.
+</div>
+
+Before 
+<div class=\"test\">HTML content</div> after
+
+Plain text and <em>emphasis</em> with HTML
+Inline <body>HTML<div>content</div>
+</body>
+
 ` + "```go" + `
 func example() {
     fmt.Println("Hello, world!")

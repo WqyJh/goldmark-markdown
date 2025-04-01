@@ -275,6 +275,30 @@ func (r *Renderer) renderFencedCodeBlock(node ast.Node, entering bool) ast.WalkS
 func (r *Renderer) renderHTMLBlock(node ast.Node, entering bool) ast.WalkStatus {
 	n := node.(*ast.HTMLBlock)
 	if entering {
+		if r.config.TextTransformer != nil {
+			// Collect all HTML block content into a single string
+			var htmlContent strings.Builder
+			lines := n.Lines()
+			for i := 0; i < lines.Len(); i++ {
+				line := lines.At(i)
+				htmlContent.Write(line.Value(r.rc.source))
+			}
+
+			// Add closure line if present
+			if n.HasClosure() {
+				htmlContent.Write(n.ClosureLine.Value(r.rc.source))
+			}
+
+			// Send the entire HTML content to the TextTransformer
+			htmlStr := htmlContent.String()
+			if translation, ok := r.config.TextTransformer.Transform(TextTypeHTML, htmlStr); ok {
+				// Write the translated HTML directly
+				r.rc.writer.WriteBytes([]byte(translation))
+				return ast.WalkContinue
+			}
+		}
+
+		// Fall back to default behavior if no transformation happened
 		r.rc.skipTranslation = true
 		r.renderLines(node, entering)
 	} else {
@@ -322,13 +346,32 @@ func (r *Renderer) renderListItem(node ast.Node, entering bool) ast.WalkStatus {
 	return ast.WalkContinue
 }
 
+// inline html tags
 func (r *Renderer) renderRawHTML(node ast.Node, entering bool) ast.WalkStatus {
 	n := node.(*ast.RawHTML)
 	if entering {
-		r.rc.skipTranslation = true
+		if r.config.TextTransformer != nil {
+			// For RawHTML, we just process this single node
+			// We'll capture the complete HTML structure during translation step
+			// with a custom TextTransformer approach
+			var htmlContent strings.Builder
+			segments := n.Segments
+			for i := 0; i < segments.Len(); i++ {
+				segment := segments.At(i)
+				htmlContent.Write(segment.Value(r.rc.source))
+			}
+
+			// Send the HTML content to the TextTransformer
+			htmlStr := htmlContent.String()
+			if translation, ok := r.config.TextTransformer.Transform(TextTypeHTML, htmlStr); ok {
+				// Write the translated HTML directly
+				r.rc.writer.WriteBytes([]byte(translation))
+				return ast.WalkContinue
+			}
+		}
+
+		// Fall back to default behavior if no transformation happened
 		r.renderSegments(n.Segments, false)
-	} else {
-		r.rc.skipTranslation = false
 	}
 	return ast.WalkContinue
 }
@@ -344,7 +387,7 @@ func (r *Renderer) renderText(node ast.Node, entering bool) ast.WalkStatus {
 			textStr := string(text)
 			trimmedText := strings.TrimSpace(textStr)
 
-			if translation, ok := r.config.TextTransformer.Transform(trimmedText); ok {
+			if translation, ok := r.config.TextTransformer.Transform(TextTypePlain, trimmedText); ok {
 				// Preserve the original leading and trailing spaces
 				leadingSpaces := textStr[:len(textStr)-len(strings.TrimLeftFunc(textStr, unicode.IsSpace))]
 				trailingSpaces := textStr[len(strings.TrimRightFunc(textStr, unicode.IsSpace)):]

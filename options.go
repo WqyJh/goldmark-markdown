@@ -5,7 +5,7 @@ import (
 )
 
 type TextTransformer interface {
-	Transform(text string) (string, bool)
+	Transform(textType TextType, text string) (string, bool)
 }
 
 // Config struct holds configurations for the markdown based renderer.
@@ -285,6 +285,13 @@ func WithNestedListLength(style NestedListLength) interface {
 // optTextTransformer is an option name used in WithTextTransformer
 const optTextTransformer renderer.OptionName = "TextTransformer"
 
+type TextType int
+
+const (
+	TextTypePlain TextType = iota
+	TextTypeHTML
+)
+
 type withTextTransformer struct {
 	value TextTransformer
 }
@@ -308,7 +315,7 @@ func WithTextTransformer(transformer TextTransformer) interface {
 
 type MapTransformer map[string]string
 
-func (t MapTransformer) Transform(text string) (string, bool) {
+func (t MapTransformer) Transform(textType TextType, text string) (string, bool) {
 	v, ok := t[text]
 	return v, ok
 }

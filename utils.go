@@ -64,6 +64,14 @@ func printASTNode(w io.Writer, source []byte, n ast.Node, level int, prefix stri
 		fmt.Fprintf(w, " [%q]", n.Value)
 	case *ast.RawHTML:
 		fmt.Fprintf(w, " [HTML]")
+		// Print HTML content
+		if n.Segments.Len() > 0 {
+			fmt.Fprintf(w, " Content:")
+			for i := 0; i < n.Segments.Len(); i++ {
+				segment := n.Segments.At(i)
+				fmt.Fprintf(w, "\n%s%s  |%s", prefix+currentPrefix, strings.Repeat(" ", len(nodeName)), segment.Value(source))
+			}
+		}
 	case *ast.Link:
 		fmt.Fprintf(w, " [%s]", n.Destination)
 	case *ast.Image:
@@ -112,6 +120,16 @@ func printASTNode(w io.Writer, source []byte, n ast.Node, level int, prefix stri
 		fmt.Fprintf(w, " [Row]")
 	case *east.TableCell:
 		fmt.Fprintf(w, " [Cell]")
+	case *ast.HTMLBlock:
+		fmt.Fprintf(w, " [HTMLBlock]")
+		// Print HTML block content
+		if n.Lines().Len() > 0 {
+			fmt.Fprintf(w, " Content:")
+			for i := 0; i < n.Lines().Len(); i++ {
+				line := n.Lines().At(i)
+				fmt.Fprintf(w, "\n%s%s  |%s", prefix+currentPrefix, strings.Repeat(" ", len(nodeName)), line.Value(source))
+			}
+		}
 	}
 
 	fmt.Fprintln(w)
