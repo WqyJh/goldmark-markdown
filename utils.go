@@ -7,6 +7,8 @@ import (
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 )
 
@@ -21,7 +23,12 @@ func PrintAST(w io.Writer, source []byte, n ast.Node) error {
 
 // PrintASTFromMarkdown parses the markdown text into an AST and prints its structure
 func PrintASTFromMarkdown(w io.Writer, source []byte) error {
-	parser := goldmark.DefaultParser()
+	md := goldmark.New(
+		goldmark.WithExtensions(
+			extension.Table,
+		),
+	)
+	parser := md.Parser()
 	reader := text.NewReader(source)
 	doc := parser.Parse(reader)
 
@@ -97,6 +104,14 @@ func printASTNode(w io.Writer, source []byte, n ast.Node, level int, prefix stri
 				fmt.Fprintf(w, "\n%s%s  |%s", prefix+currentPrefix, strings.Repeat(" ", len(nodeName)), line.Value(source))
 			}
 		}
+	case *east.Table:
+		fmt.Fprintf(w, " [Table]")
+	case *east.TableHeader:
+		fmt.Fprintf(w, " [Header Row]")
+	case *east.TableRow:
+		fmt.Fprintf(w, " [Row]")
+	case *east.TableCell:
+		fmt.Fprintf(w, " [Cell]")
 	}
 
 	fmt.Fprintln(w)

@@ -11,8 +11,10 @@ import (
 	"unicode"
 
 	"github.com/yuin/goldmark/ast"
+	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 // NewRenderer returns a new markdown Renderer that is configured by default values.
@@ -106,6 +108,13 @@ func (r *Renderer) Render(w io.Writer, source []byte, n ast.Node) error {
 	return ast.Walk(n, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		return r.nodeRendererFuncs[n.Kind()](n, entering), r.rc.writer.Err()
 	})
+}
+
+func (r *Renderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(east.KindTable, r.renderTable)
+	reg.Register(east.KindTableHeader, r.renderTableHeader)
+	reg.Register(east.KindTableRow, r.renderTableRow)
+	reg.Register(east.KindTableCell, r.renderTableCell)
 }
 
 // transform wraps a renderer.NodeRendererFunc to match the nodeRenderer function signature
@@ -488,6 +497,72 @@ func (r *Renderer) renderEmphasis(node ast.Node, entering bool) ast.WalkStatus {
 	n := node.(*ast.Emphasis)
 	r.rc.writer.WriteBytes(bytes.Repeat([]byte{'*'}, n.Level))
 	return ast.WalkContinue
+}
+
+// Table rendering functions
+func (r *Renderer) renderTable(
+	w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
+	// Tables are rendered as markdown tables with | separators
+	if !entering {
+		// End the table with a newline
+		// r.rc.writer.EndLine()
+	}
+	return ast.WalkContinue, nil
+}
+
+func (r *Renderer) renderTableHeader(
+	w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
+	if entering {
+		r.rc.writer.WriteBytes([]byte("|"))
+	} else {
+		// After rendering all header cells, add the separator row
+		r.rc.writer.EndLine()
+
+		tableNode := n.Parent()
+		alignments := tableNode.(*east.Table).Alignments
+
+		r.rc.writer.WriteByte('|')
+		for _, alignment := range alignments {
+			r.rc.writer.WriteByte(' ')
+			switch alignment {
+			case east.AlignLeft:
+				r.rc.writer.WriteBytes([]byte(":----- "))
+			case east.AlignRight:
+				r.rc.writer.WriteBytes([]byte("-----: "))
+			case east.AlignCenter:
+				r.rc.writer.WriteBytes([]byte(":----: "))
+			default:
+				r.rc.writer.WriteBytes([]byte("----- "))
+			}
+			r.rc.writer.WriteByte('|')
+		}
+		r.rc.writer.EndLine()
+	}
+	return ast.WalkContinue, nil
+}
+
+func (r *Renderer) renderTableRow(
+	w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
+	if entering {
+		// Start the row with a pipe
+		r.rc.writer.WriteByte('|')
+	} else {
+		// End the row with a pipe and a newline
+		r.rc.writer.EndLine()
+	}
+	return ast.WalkContinue, nil
+}
+
+func (r *Renderer) renderTableCell(
+	w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
+	if entering {
+		// Add a space after the pipe for readability
+		r.rc.writer.WriteByte(' ')
+	} else {
+		// Add a space and pipe after each cell
+		r.rc.writer.WriteBytes([]byte(" |"))
+	}
+	return ast.WalkContinue, nil
 }
 
 type renderContext struct {

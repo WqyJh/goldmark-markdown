@@ -167,3 +167,91 @@ This is a paragraph with *emphasis* and **strong emphasis**.
 		}
 	}
 }
+
+// TestPrintASTWithTable tests the AST printing with table support
+func TestPrintASTWithTable(t *testing.T) {
+	// Sample markdown document with table
+	markdown := []byte(`# Document with Table
+
+This is a sample table:
+
+| Header 1 | Header 2 | Header 3 |
+|----------|----------|----------|
+| Cell 1   | Cell 2   | Cell 3   |
+| Cell 4   | Cell 5   | Cell 6   |
+
+End of document.
+`)
+
+	// Test PrintASTFromMarkdown by capturing its output
+	var buf bytes.Buffer
+
+	err := PrintASTFromMarkdown(&buf, markdown)
+	if err != nil {
+		t.Fatalf("PrintASTFromMarkdown returned an error: %v", err)
+	}
+
+	// Print the result for visual inspection
+	output := buf.String()
+	t.Logf("AST Output with Table:\n%s", output)
+
+	// Basic verification of Table AST structure
+	expectedTableNodes := []string{
+		"Table",
+		"TableHeader",
+		"TableRow",
+		"TableCell",
+	}
+
+	for _, expected := range expectedTableNodes {
+		if !bytes.Contains(buf.Bytes(), []byte(expected)) {
+			t.Errorf("Expected AST output to contain '%s', but it was not found", expected)
+		}
+	}
+}
+
+// TestPrintASTWithAdvancedTable tests the AST printing with a more complex table
+func TestPrintASTWithAdvancedTable(t *testing.T) {
+	// Sample markdown document with advanced table features
+	markdown := []byte(`# Advanced Table Test
+
+Here's a table with various alignments and formatting:
+
+| Left | Center | Right | Mixed Content |
+|:-----|:------:|------:|---------------|
+| 1    | *2*    | 3     | [Link](http://example.com) |
+| **Bold** | Text | 123  | ![Image](img.png) |
+| Multiline<br>cell | Empty |  | Code: ` + "`inline`" + ` |
+
+End of table.
+`)
+
+	// Test PrintASTFromMarkdown by capturing its output
+	var buf bytes.Buffer
+
+	err := PrintASTFromMarkdown(&buf, markdown)
+	if err != nil {
+		t.Fatalf("PrintASTFromMarkdown returned an error: %v", err)
+	}
+
+	// Print the result for visual inspection
+	output := buf.String()
+	t.Logf("AST Output with Advanced Table:\n%s", output)
+
+	// Check for more complex table nodes in the output
+	tableContentNodes := []string{
+		"TableHeader",
+		"TableRow",
+		"TableCell",
+		"Text",
+		"Emphasis",
+		"Link",
+		"Image",
+	}
+
+	for _, expected := range tableContentNodes {
+		if !bytes.Contains(buf.Bytes(), []byte(expected)) {
+			t.Errorf("Expected AST output to contain '%s', but it was not found", expected)
+		}
+	}
+}
