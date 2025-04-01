@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 	"sync"
 	"unicode"
 
@@ -149,9 +150,12 @@ func (r *Renderer) renderAutoLink(node ast.Node, entering bool) ast.WalkStatus {
 	n := node.(*ast.AutoLink)
 	if entering {
 		r.rc.writer.WriteBytes([]byte("<"))
+		// Set skipTranslation to true only for the URL part
+		r.rc.skipTranslation = true
 		r.rc.writer.WriteBytes(n.URL(r.rc.source))
 	} else {
 		r.rc.writer.WriteBytes([]byte(">"))
+		r.rc.skipTranslation = false
 	}
 	return ast.WalkContinue
 }
@@ -233,9 +237,12 @@ func (r *Renderer) renderThematicBreak(node ast.Node, entering bool) ast.WalkSta
 func (r *Renderer) renderCodeBlock(node ast.Node, entering bool) ast.WalkStatus {
 	if entering {
 		r.rc.writer.PushPrefix(r.config.Bytes())
+		// Skip translation for code block content
+		r.rc.skipTranslation = true
 		r.renderLines(node, entering)
 	} else {
 		r.rc.writer.PopPrefix()
+		r.rc.skipTranslation = false
 	}
 	return ast.WalkContinue
 }
@@ -244,11 +251,14 @@ func (r *Renderer) renderFencedCodeBlock(node ast.Node, entering bool) ast.WalkS
 	n := node.(*ast.FencedCodeBlock)
 	r.rc.writer.WriteBytes([]byte("```"))
 	if entering {
+		r.rc.skipTranslation = true
 		if info := n.Info; info != nil {
 			r.rc.writer.WriteBytes(info.Value(r.rc.source))
 		}
 		r.rc.writer.FlushLine()
 		r.renderLines(node, entering)
+	} else {
+		r.rc.skipTranslation = false
 	}
 	return ast.WalkContinue
 }
@@ -256,11 +266,13 @@ func (r *Renderer) renderFencedCodeBlock(node ast.Node, entering bool) ast.WalkS
 func (r *Renderer) renderHTMLBlock(node ast.Node, entering bool) ast.WalkStatus {
 	n := node.(*ast.HTMLBlock)
 	if entering {
+		r.rc.skipTranslation = true
 		r.renderLines(node, entering)
 	} else {
 		if n.HasClosure() {
 			r.rc.writer.WriteLine(n.ClosureLine.Value(r.rc.source))
 		}
+		r.rc.skipTranslation = false
 	}
 	return ast.WalkContinue
 }
@@ -304,7 +316,10 @@ func (r *Renderer) renderListItem(node ast.Node, entering bool) ast.WalkStatus {
 func (r *Renderer) renderRawHTML(node ast.Node, entering bool) ast.WalkStatus {
 	n := node.(*ast.RawHTML)
 	if entering {
+		r.rc.skipTranslation = true
 		r.renderSegments(n.Segments, false)
+	} else {
+		r.rc.skipTranslation = false
 	}
 	return ast.WalkContinue
 }
@@ -313,6 +328,22 @@ func (r *Renderer) renderText(node ast.Node, entering bool) ast.WalkStatus {
 	n := node.(*ast.Text)
 	if entering {
 		text := n.Value(r.rc.source)
+
+		// Check if we have a translation for this text
+		if r.config.Translations != nil && !r.rc.skipTranslation {
+			// Get a string representation of the text
+			textStr := string(text)
+			trimmedText := strings.TrimSpace(textStr)
+
+			if translation, ok := r.config.Translations[trimmedText]; ok {
+				// Preserve the original leading and trailing spaces
+				leadingSpaces := textStr[:len(textStr)-len(strings.TrimLeftFunc(textStr, unicode.IsSpace))]
+				trailingSpaces := textStr[len(strings.TrimRightFunc(textStr, unicode.IsSpace)):]
+
+				// Apply translation with preserved spaces
+				text = []byte(leadingSpaces + translation + trailingSpaces)
+			}
+		}
 
 		r.rc.writer.WriteBytes(text)
 		if n.SoftLineBreak() {
@@ -343,35 +374,53 @@ func (r *Renderer) renderLines(node ast.Node, entering bool) ast.WalkStatus {
 
 func (r *Renderer) renderLink(node ast.Node, entering bool) ast.WalkStatus {
 	n := node.(*ast.Link)
-	return r.renderLinkCommon(n.Title, n.Destination, entering)
+	if entering {
+		r.rc.writer.WriteBytes([]byte("["))
+		// Text content should be translated, skipTranslation is false by default
+	} else {
+		// Only set skipTranslation when rendering the URL part
+		r.rc.skipTranslation = true
+		r.rc.writer.WriteBytes([]byte("]("))
+		r.rc.writer.WriteBytes(n.Destination)
+		if len(n.Title) > 0 {
+			r.rc.writer.WriteBytes([]byte(" \""))
+			r.rc.writer.WriteBytes(n.Title)
+			r.rc.writer.WriteBytes([]byte("\""))
+		}
+		r.rc.writer.WriteBytes([]byte(")"))
+		r.rc.skipTranslation = false
+	}
+	return ast.WalkContinue
 }
 
 func (r *Renderer) renderImage(node ast.Node, entering bool) ast.WalkStatus {
 	n := node.(*ast.Image)
 	if entering {
-		r.rc.writer.WriteBytes([]byte("!"))
-	}
-	return r.renderLinkCommon(n.Title, n.Destination, entering)
-}
-
-func (r *Renderer) renderLinkCommon(title, destination []byte, entering bool) ast.WalkStatus {
-	if entering {
-		r.rc.writer.WriteBytes([]byte("["))
+		r.rc.writer.WriteBytes([]byte("!["))
+		// Alt text should be translated, skipTranslation is false by default
 	} else {
+		// Only set skipTranslation when rendering the URL part
+		r.rc.skipTranslation = true
 		r.rc.writer.WriteBytes([]byte("]("))
-		r.rc.writer.WriteBytes(destination)
-		if len(title) > 0 {
+		r.rc.writer.WriteBytes(n.Destination)
+		if len(n.Title) > 0 {
 			r.rc.writer.WriteBytes([]byte(" \""))
-			r.rc.writer.WriteBytes(title)
+			// Temporarily disable skipTranslation to allow the title to be translated
+			r.rc.skipTranslation = false
+			r.rc.writer.WriteBytes(n.Title)
+			// Re-enable skipTranslation for the rest of the URL
+			r.rc.skipTranslation = true
 			r.rc.writer.WriteBytes([]byte("\""))
 		}
 		r.rc.writer.WriteBytes([]byte(")"))
+		r.rc.skipTranslation = false
 	}
 	return ast.WalkContinue
 }
 
 func (r *Renderer) renderCodeSpan(node ast.Node, entering bool) ast.WalkStatus {
 	if entering {
+		r.rc.skipTranslation = true
 		// get contents of codespan
 		var contentBytes []byte
 		for c := node.FirstChild(); c != nil; c = c.NextSibling() {
@@ -429,6 +478,7 @@ func (r *Renderer) renderCodeSpan(node ast.Node, entering bool) ast.WalkStatus {
 			r.rc.writer.WriteBytes([]byte(" "))
 		}
 		r.rc.writer.WriteBytes(bytes.Repeat([]byte("`"), r.rc.codeSpanContext.backtickLength))
+		r.rc.skipTranslation = false
 	}
 
 	return ast.WalkContinue
@@ -447,6 +497,8 @@ type renderContext struct {
 	// listMarkers is the marker character used for the current list
 	lists           []listContext
 	codeSpanContext codeSpanContext
+	// skipTranslation indicates whether we're inside a node type that shouldn't be translated
+	skipTranslation bool
 }
 
 type listContext struct {

@@ -11,6 +11,7 @@ type Config struct {
 	ThematicBreakStyle
 	ThematicBreakLength
 	NestedListLength
+	Translations map[string]string
 }
 
 // NewConfig returns a new Config with defaults and the given options.
@@ -21,6 +22,7 @@ func NewConfig(options ...Option) *Config {
 		ThematicBreakStyle:  ThematicBreakStyle(ThematicBreakStyleDashed),
 		ThematicBreakLength: ThematicBreakLength(ThematicBreakLengthMinimum),
 		NestedListLength:    NestedListLength(NestedListLengthMinimum),
+		Translations:        map[string]string{},
 	}
 	for _, opt := range options {
 		opt.SetMarkdownOption(c)
@@ -41,6 +43,8 @@ func (c *Config) SetOption(name renderer.OptionName, value interface{}) {
 		c.ThematicBreakLength = value.(ThematicBreakLength)
 	case optNestedListLength:
 		c.NestedListLength = value.(NestedListLength)
+	case optTranslations:
+		c.Translations = value.(map[string]string)
 	}
 }
 
@@ -268,4 +272,32 @@ func WithNestedListLength(style NestedListLength) interface {
 	Option
 } {
 	return &withNestedListLength{style}
+}
+
+// ============================================================================
+// Translations Option
+// ============================================================================
+
+// optTranslations is an option name used in WithTranslations
+const optTranslations renderer.OptionName = "Translations"
+
+type withTranslations struct {
+	value map[string]string
+}
+
+func (o *withTranslations) SetConfig(c *renderer.Config) {
+	c.Options[optTranslations] = o.value
+}
+
+// SetMarkdownOption implements renderer.Option
+func (o *withTranslations) SetMarkdownOption(c *Config) {
+	c.Translations = o.value
+}
+
+// WithTranslations is a functional option that sets the translations map for text replacement.
+func WithTranslations(translations map[string]string) interface {
+	renderer.Option
+	Option
+} {
+	return &withTranslations{translations}
 }
