@@ -159,9 +159,8 @@ def hello_world():
 		"Cell 2":                               "单元格 2",
 		"Cell 3":                               "单元格 3",
 		"Cell 4":                               "单元格 4",
-		"This is a blockquote":                 "这是一个引用",
-		"With multiple lines":                  "包含多行",
-		"Last updated: 2024":                   "最后更新：2024",
+		"This is a blockquote\nWith multiple lines": "这是一个引用\n包含多行",
+		"Last updated: 2024":                        "最后更新：2024",
 	}
 
 	// Create a markdown renderer with translations

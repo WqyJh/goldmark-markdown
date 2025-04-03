@@ -378,30 +378,80 @@ func (r *Renderer) renderRawHTML(node ast.Node, entering bool) ast.WalkStatus {
 
 func (r *Renderer) renderText(node ast.Node, entering bool) ast.WalkStatus {
 	n := node.(*ast.Text)
+
 	if entering {
 		text := n.Value(r.rc.source)
+		nextIsSibling := node.NextSibling() != nil && node.NextSibling().Kind() == ast.KindText
 
-		// Check if we have a translation for this text
-		if r.config.TextTransformer != nil && !r.rc.skipTranslation {
-			// Get a string representation of the text
-			textStr := string(text)
-			trimmedText := strings.TrimSpace(textStr)
+		// Initialize or append to text buffer in renderContext
+		if !r.rc.textBufferActive {
+			// Initialize buffer
+			if r.rc.textBuffer == nil {
+				r.rc.textBuffer = &bytes.Buffer{}
+			} else {
+				r.rc.textBuffer.Reset()
+			}
+			r.rc.textBuffer.Write(text)
+			r.rc.textBufferActive = true
+			// Store this node's line break status
+			if n.SoftLineBreak() {
+				r.rc.pendingLineBreaks = append(r.rc.pendingLineBreaks, true)
+			}
+		} else {
+			// If we have pending line breaks from previous Text nodes, add them now
+			if len(r.rc.pendingLineBreaks) > 0 {
+				for _, hasBreak := range r.rc.pendingLineBreaks {
+					if hasBreak {
+						// Add a newline character to represent the line break
+						r.rc.textBuffer.WriteByte('\n')
+					}
+				}
+				// Clear pending breaks
+				r.rc.pendingLineBreaks = r.rc.pendingLineBreaks[:0]
+			}
 
-			if translation, ok := r.config.TextTransformer.Transform(TextTypePlain, trimmedText); ok {
-				// Preserve the original leading and trailing spaces
-				leadingSpaces := textStr[:len(textStr)-len(strings.TrimLeftFunc(textStr, unicode.IsSpace))]
-				trailingSpaces := textStr[len(strings.TrimRightFunc(textStr, unicode.IsSpace)):]
+			// Append current text
+			r.rc.textBuffer.Write(text)
 
-				// Apply translation with preserved spaces
-				text = []byte(leadingSpaces + translation + trailingSpaces)
+			// Store this node's line break status
+			if n.SoftLineBreak() {
+				r.rc.pendingLineBreaks = append(r.rc.pendingLineBreaks, true)
 			}
 		}
 
-		r.rc.writer.WriteBytes(text)
-		if n.SoftLineBreak() {
-			r.rc.writer.EndLine()
+		// If this is the last Text node in a sequence, process all accumulated text
+		if !nextIsSibling {
+			textStr := r.rc.textBuffer.String()
+
+			// Check if we have a translation for this text
+			if r.config.TextTransformer != nil && !r.rc.skipTranslation {
+				trimmedText := strings.TrimSpace(textStr)
+
+				if translation, ok := r.config.TextTransformer.Transform(TextTypePlain, trimmedText); ok {
+					// Preserve the original leading and trailing spaces
+					leadingSpaces := textStr[:len(textStr)-len(strings.TrimLeftFunc(textStr, unicode.IsSpace))]
+					trailingSpaces := textStr[len(strings.TrimRightFunc(textStr, unicode.IsSpace)):]
+
+					// Apply translation with preserved spaces
+					textStr = leadingSpaces + translation + trailingSpaces
+				}
+			}
+
+			// Write the accumulated text
+			r.rc.writer.WriteBytes([]byte(textStr))
+
+			// Handle final node's line break if needed
+			lastNodeHasLineBreak := len(r.rc.pendingLineBreaks) > 0 && r.rc.pendingLineBreaks[len(r.rc.pendingLineBreaks)-1]
+			if lastNodeHasLineBreak {
+				r.rc.writer.EndLine()
+			}
+
+			// Reset text buffer state
+			r.rc.textBufferActive = false
+			r.rc.pendingLineBreaks = nil
 		}
 	}
+
 	return ast.WalkContinue
 }
 
@@ -617,6 +667,10 @@ type renderContext struct {
 	codeSpanContext codeSpanContext
 	// skipTranslation indicates whether we're inside a node type that shouldn't be translated
 	skipTranslation bool
+	// Text accumulation fields
+	textBuffer        *bytes.Buffer
+	textBufferActive  bool
+	pendingLineBreaks []bool
 }
 
 type listContext struct {
